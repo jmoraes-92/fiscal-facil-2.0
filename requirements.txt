@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlalchemy
+pymysql
+python-dotenv
+xmltodict
+requests
+python-multipart
+streamlit
+pandas

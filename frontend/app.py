@@ -3,6 +3,17 @@ import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime
+import streamlit as st
+
+# --- DEBUG VISUAL ---
+st.write("🔧 **Status da Configuração:**")
+try:
+    url_configurada = st.secrets["API_URL"]
+    st.success(f"✅ Segredo encontrado! URL: {url_configurada}")
+except Exception as e:
+    st.error(f"❌ Segredo NÃO encontrado. Erro: {e}")
+    st.warning("O sistema vai tentar usar localhost (vai falhar na nuvem).")
+# --------------------
 
 # Tenta pegar dos segredos do Streamlit, se não achar, usa local
 try:
