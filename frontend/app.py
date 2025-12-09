@@ -5,9 +5,10 @@ import pandas as pd
 from datetime import datetime
 
 # Tenta pegar dos segredos do Streamlit, se não achar, usa local
-if "API_URL" in st.secrets:
+try:
     API_URL = st.secrets["API_URL"]
-else:
+except:
+    # Se der erro (porque não tem arquivo de segredos no PC), usa o local
     API_URL = "http://127.0.0.1:8000"
 
 # Configuração da Página
