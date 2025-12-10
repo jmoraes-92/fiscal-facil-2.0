@@ -6,19 +6,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Tenta pegar a URL do sistema (Railway/Supabase). Se não tiver, usa a local (MySQL)
-# Substitua a URL abaixo pela sua local se precisar rodar offline
-DATABASE_URL = os.getenv("DATABASE_URL", "mysql+pymysql://root:1234@localhost/audit_contabil_poc")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Correção para o padrão do SQLAlchemy se a URL vier como "postgres://"
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if not DATABASE_URL:
+    # Fallback seguro para desenvolvimento local com SQLite (não precisa de driver extra)
+    # ou levanta um erro se preferir travar.
+    print("⚠️ AVISO: DATABASE_URL não encontrada. Usando SQLite temporário.")
+    DATABASE_URL = "sqlite:///./sql_app.db" 
+else:
+    # Correção para o Supabase (postgres:// -> postgresql://)
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Cria a conexão
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=3600
+    # SQLite precisa desse argumento extra, Postgres não.
+    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
+    pool_pre_ping=True
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
