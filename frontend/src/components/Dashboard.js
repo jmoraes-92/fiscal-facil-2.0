@@ -123,7 +123,7 @@ const Dashboard = () => {
                 <div
                   key={empresa.id}
                   data-testid={`empresa-card-${empresa.id}`}
-                  onClick={() => setEmpresaSelecionada(empresa)}
+                  onClick={() => handleSelecionarEmpresa(empresa)}
                   className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
                     empresaSelecionada?.id === empresa.id
                       ? 'border-blue-500 bg-blue-50'
