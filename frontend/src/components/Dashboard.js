@@ -5,6 +5,7 @@ import CadastroEmpresa from './CadastroEmpresa';
 import UploadXML from './UploadXML';
 import ListaNotas from './ListaNotas';
 import MonitorRBT12 from './MonitorRBT12';
+import BotaoRelatorio from './BotaoRelatorio';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
