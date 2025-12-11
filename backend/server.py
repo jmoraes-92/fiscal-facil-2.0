@@ -392,6 +392,52 @@ async def importar_notas_em_lote(
         "resultados": resultados
     }
 
+@app.get("/api/notas/{nota_id}/detalhes")
+async def obter_detalhes_nota(nota_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Retorna todos os detalhes de uma nota fiscal, incluindo XML original.
+    """
+    from bson import ObjectId
+    
+    # Busca a nota
+    try:
+        nota = await db.notas_fiscais.find_one({"_id": ObjectId(nota_id)})
+    except:
+        raise HTTPException(status_code=400, detail="ID de nota inválido")
+    
+    if not nota:
+        raise HTTPException(status_code=404, detail="Nota não encontrada")
+    
+    # Verifica se a empresa da nota pertence ao usuário
+    empresa_id = nota.get("empresa_id")
+    try:
+        empresa = await db.empresas.find_one({"_id": ObjectId(empresa_id)})
+    except:
+        pass
+    
+    if not empresa or str(empresa.get("usuario_id")) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    # Retorna nota com todos os dados
+    return {
+        "id": str(nota["_id"]),
+        "numero_nota": nota.get("numero_nota"),
+        "data_emissao": nota.get("data_emissao"),
+        "chave_validacao": nota.get("chave_validacao"),
+        "cnpj_tomador": nota.get("cnpj_tomador"),
+        "codigo_servico_utilizado": nota.get("codigo_servico_utilizado"),
+        "valor_total": nota.get("valor_total"),
+        "status_auditoria": nota.get("status_auditoria"),
+        "mensagem_erro": nota.get("mensagem_erro"),
+        "xml_original": nota.get("xml_original", ''),
+        "data_importacao": nota.get("data_importacao"),
+        "empresa": {
+            "razao_social": empresa.get("razao_social"),
+            "cnpj": empresa.get("cnpj"),
+            "regime_tributario": empresa.get("regime_tributario")
+        }
+    }
+
 @app.get("/api/notas/empresa/{empresa_id}")
 async def listar_notas_empresa(empresa_id: str, current_user: dict = Depends(get_current_user)):
     from bson import ObjectId
