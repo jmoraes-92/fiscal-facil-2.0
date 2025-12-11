@@ -55,6 +55,8 @@ class EmpresaCadastro(BaseModel):
 
 # ==================== AUTH MIDDLEWARE ====================
 async def get_current_user(authorization: Optional[str] = Header(None)):
+    from bson import ObjectId
+    
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Token não fornecido")
     
@@ -68,7 +70,11 @@ async def get_current_user(authorization: Optional[str] = Header(None)):
     if not user_id:
         raise HTTPException(status_code=401, detail="Token inválido")
     
-    user = await db.usuarios.find_one({"_id": user_id})
+    try:
+        user = await db.usuarios.find_one({"_id": ObjectId(user_id)})
+    except:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    
     if not user:
         raise HTTPException(status_code=401, detail="Usuário não encontrado")
     
