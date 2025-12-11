@@ -88,9 +88,9 @@ const UploadXML = ({ empresaId }) => {
       )}
 
       {resultado && (
-        <div data-testid="upload-result" className="mt-4 p-4 border rounded-lg ${
+        <div data-testid="upload-result" className={`mt-4 p-4 border rounded-lg ${
           resultado.status_auditoria === 'APROVADA' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-        }">
+        }`}>
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-semibold text-lg">
               {resultado.status_auditoria === 'APROVADA' ? '✅ Nota Aprovada' : '❌ Nota com Erros'}
