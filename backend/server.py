@@ -583,6 +583,200 @@ async def excluir_empresa(empresa_id: str, current_user: dict = Depends(get_curr
     }
 
 # ==================== RELATÓRIOS ====================
+@app.get("/api/notas/{nota_id}/pdf")
+async def gerar_pdf_nota(nota_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Gera um PDF formatado da nota fiscal para visualização.
+    """
+    from bson import ObjectId
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+    
+    # Busca a nota
+    try:
+        nota = await db.notas_fiscais.find_one({"_id": ObjectId(nota_id)})
+    except:
+        raise HTTPException(status_code=400, detail="ID de nota inválido")
+    
+    if not nota:
+        raise HTTPException(status_code=404, detail="Nota não encontrada")
+    
+    # Verifica se a empresa da nota pertence ao usuário
+    empresa_id = nota.get("empresa_id")
+    try:
+        empresa = await db.empresas.find_one({"_id": ObjectId(empresa_id)})
+    except:
+        pass
+    
+    if not empresa or str(empresa.get("usuario_id")) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    # Cria o PDF em memória
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=15*mm)
+    elements = []
+    
+    # Estilos
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#1e40af'),
+        spaceAfter=20,
+        alignment=TA_CENTER
+    )
+    
+    header_style = ParagraphStyle(
+        'CustomHeader',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.HexColor('#1f2937'),
+        spaceAfter=10
+    )
+    
+    # Título
+    elements.append(Paragraph("NOTA FISCAL DE SERVIÇOS ELETRÔNICA", title_style))
+    elements.append(Spacer(1, 10*mm))
+    
+    # Informações da Empresa Prestadora
+    elements.append(Paragraph("DADOS DA EMPRESA PRESTADORA", header_style))
+    
+    empresa_data = [
+        ['Razão Social:', empresa.get('razao_social', 'N/A')],
+        ['CNPJ:', empresa.get('cnpj', 'N/A')],
+        ['Regime Tributário:', empresa.get('regime_tributario', 'N/A')]
+    ]
+    
+    empresa_table = Table(empresa_data, colWidths=[40*mm, 130*mm])
+    empresa_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f3f4f6')),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(empresa_table)
+    elements.append(Spacer(1, 8*mm))
+    
+    # Dados da Nota Fiscal
+    elements.append(Paragraph("DADOS DA NOTA FISCAL", header_style))
+    
+    # Formata data
+    data_emissao = nota.get('data_emissao', '')
+    try:
+        data_obj = datetime.fromisoformat(data_emissao.replace('Z', '+00:00'))
+        data_formatada = data_obj.strftime('%d/%m/%Y às %H:%M')
+    except:
+        data_formatada = data_emissao
+    
+    # Status com cor
+    status = nota.get('status_auditoria', 'N/A')
+    status_color = colors.green if status == 'APROVADA' else colors.red
+    
+    nota_data = [
+        ['Número da Nota:', str(nota.get('numero_nota', 'N/A'))],
+        ['Data de Emissão:', data_formatada],
+        ['Chave de Validação:', nota.get('chave_validacao', 'N/A')],
+        ['Código de Serviço:', nota.get('codigo_servico_utilizado', 'N/A')],
+        ['CNPJ Tomador:', nota.get('cnpj_tomador', 'N/A')],
+        ['Valor Total:', f"R$ {nota.get('valor_total', 0):.2f}"]
+    ]
+    
+    nota_table = Table(nota_data, colWidths=[40*mm, 130*mm])
+    nota_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f3f4f6')),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(nota_table)
+    elements.append(Spacer(1, 8*mm))
+    
+    # Status da Auditoria
+    elements.append(Paragraph("RESULTADO DA AUDITORIA", header_style))
+    
+    auditoria_data = [
+        ['Status:', status],
+        ['Resultado:', nota.get('mensagem_erro', 'Nota fiscal em conformidade')]
+    ]
+    
+    auditoria_table = Table(auditoria_data, colWidths=[40*mm, 130*mm])
+    auditoria_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f3f4f6')),
+        ('BACKGROUND', (1, 0), (1, 0), colors.HexColor('#dcfce7') if status == 'APROVADA' else colors.HexColor('#fee2e2')),
+        ('TEXTCOLOR', (0, 0), (-1, -1), colors.black),
+        ('TEXTCOLOR', (1, 0), (1, 0), status_color),
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+        ('FONTNAME', (1, 0), (1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    elements.append(auditoria_table)
+    elements.append(Spacer(1, 8*mm))
+    
+    # Rodapé
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.grey,
+        alignment=TA_CENTER
+    )
+    
+    data_importacao = nota.get('data_importacao', '')
+    try:
+        data_import_obj = datetime.fromisoformat(data_importacao.replace('Z', '+00:00'))
+        data_import_formatada = data_import_obj.strftime('%d/%m/%Y às %H:%M')
+    except:
+        data_import_formatada = data_importacao
+    
+    elements.append(Spacer(1, 15*mm))
+    elements.append(Paragraph(f"Documento gerado em {datetime.utcnow().strftime('%d/%m/%Y às %H:%M')}", footer_style))
+    elements.append(Paragraph(f"Importado em: {data_import_formatada}", footer_style))
+    elements.append(Paragraph("Fiscal Fácil - Sistema de Auditoria Fiscal", footer_style))
+    
+    # Gera o PDF
+    doc.build(elements)
+    buffer.seek(0)
+    
+    # Retorna como streaming response
+    filename = f"nota_{nota.get('numero_nota', 'fiscal')}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"inline; filename={filename}"}
+    )
+
 @app.get("/api/relatorios/inconsistencias/{empresa_id}")
 async def gerar_relatorio_inconsistencias(empresa_id: str, current_user: dict = Depends(get_current_user)):
     """
