@@ -252,7 +252,7 @@ async def processar_xml_nota(empresa_id: str, empresa: dict, conteudo: bytes, no
             status = "ERRO_CNAE"
             mensagem = f"Código de serviço '{codigo_servico}' não autorizado para este CNPJ"
         
-        # Salva a nota
+        # Salva a nota (incluindo o XML original)
         nota_doc = {
             "empresa_id": empresa_id,
             "numero_nota": dados_xml['numero_nota'],
@@ -263,6 +263,7 @@ async def processar_xml_nota(empresa_id: str, empresa: dict, conteudo: bytes, no
             "valor_total": dados_xml['valor_total'],
             "status_auditoria": status,
             "mensagem_erro": mensagem,
+            "xml_original": dados_xml.get('xml_bruto', ''),  # Armazena o XML completo
             "data_importacao": datetime.utcnow().isoformat()
         }
         
