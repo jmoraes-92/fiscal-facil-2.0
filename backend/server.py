@@ -582,6 +582,115 @@ async def excluir_empresa(empresa_id: str, current_user: dict = Depends(get_curr
         "notas_excluidas": total_notas
     }
 
+# ==================== RELATÓRIOS ====================
+@app.get("/api/relatorios/inconsistencias/{empresa_id}")
+async def gerar_relatorio_inconsistencias(empresa_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Gera um relatório Excel com todas as notas que possuem inconsistências/erros.
+    """
+    from bson import ObjectId
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from io import BytesIO
+    from fastapi.responses import StreamingResponse
+    
+    # Verifica se a empresa pertence ao usuário
+    try:
+        empresa = await db.empresas.find_one({"_id": ObjectId(empresa_id)})
+    except:
+        raise HTTPException(status_code=400, detail="ID de empresa inválido")
+    
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    
+    if str(empresa.get("usuario_id")) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    # Busca apenas notas com erros
+    notas_com_erro = []
+    async for nota in db.notas_fiscais.find({
+        "empresa_id": empresa_id,
+        "status_auditoria": {"$ne": "APROVADA"}
+    }).sort("data_emissao", -1):
+        notas_com_erro.append(nota)
+    
+    if not notas_com_erro:
+        raise HTTPException(
+            status_code=404, 
+            detail="Nenhuma inconsistência encontrada. Todas as notas estão aprovadas!"
+        )
+    
+    # Cria o Excel
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Inconsistências"
+    
+    # Cabeçalho do relatório
+    ws.merge_cells('A1:F1')
+    ws['A1'] = f"Relatório de Inconsistências - {empresa.get('razao_social', '')}"
+    ws['A1'].font = Font(size=14, bold=True)
+    ws['A1'].alignment = Alignment(horizontal='center')
+    
+    ws['A2'] = f"CNPJ: {empresa.get('cnpj', '')}"
+    ws['A3'] = f"Data do Relatório: {datetime.utcnow().strftime('%d/%m/%Y %H:%M')}"
+    ws['A4'] = f"Total de Inconsistências: {len(notas_com_erro)}"
+    
+    # Cabeçalhos da tabela
+    headers = ['Número da Nota', 'Data de Emissão', 'Código de Serviço', 'Valor (R$)', 'Status', 'Erro Encontrado']
+    header_row = 6
+    
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=header_row, column=col)
+        cell.value = header
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(start_color="FF0000", end_color="FF0000", fill_type="solid")
+        cell.alignment = Alignment(horizontal='center')
+    
+    # Dados
+    for row_idx, nota in enumerate(notas_com_erro, header_row + 1):
+        ws.cell(row=row_idx, column=1, value=nota.get('numero_nota'))
+        
+        # Data de emissão formatada
+        data_str = nota.get('data_emissao', '')
+        if data_str:
+            try:
+                data_obj = datetime.fromisoformat(data_str.replace('Z', '+00:00'))
+                ws.cell(row=row_idx, column=2, value=data_obj.strftime('%d/%m/%Y'))
+            except:
+                ws.cell(row=row_idx, column=2, value=data_str)
+        
+        ws.cell(row=row_idx, column=3, value=nota.get('codigo_servico_utilizado'))
+        ws.cell(row=row_idx, column=4, value=nota.get('valor_total'))
+        ws.cell(row=row_idx, column=5, value=nota.get('status_auditoria'))
+        ws.cell(row=row_idx, column=6, value=nota.get('mensagem_erro'))
+        
+        # Destaca linha com erro
+        for col in range(1, 7):
+            cell = ws.cell(row=row_idx, column=col)
+            cell.fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")
+    
+    # Ajusta largura das colunas
+    ws.column_dimensions['A'].width = 15
+    ws.column_dimensions['B'].width = 15
+    ws.column_dimensions['C'].width = 18
+    ws.column_dimensions['D'].width = 12
+    ws.column_dimensions['E'].width = 15
+    ws.column_dimensions['F'].width = 50
+    
+    # Salva em memória
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    # Retorna como download
+    filename = f"inconsistencias_{empresa.get('cnpj', 'empresa')}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 # ==================== DASHBOARD - MONITOR RBT12 ====================
 @app.get("/api/dashboard/metrics/{empresa_id}")
 async def obter_metricas_rbt12(empresa_id: str, current_user: dict = Depends(get_current_user)):
