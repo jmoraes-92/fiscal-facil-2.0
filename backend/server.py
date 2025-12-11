@@ -503,11 +503,15 @@ async def obter_estatisticas(empresa_id: str, current_user: dict = Depends(get_c
     resultado = await db.notas_fiscais.aggregate(pipeline).to_list(1)
     valor_total = resultado[0]["total"] if resultado else 0
     
+    # Cálculo de imposto estimado total (Anexo III - 6%)
+    imposto_estimado_total = valor_total * 0.06
+    
     return {
         "total_notas": total,
         "aprovadas": aprovadas,
         "com_erros": erros,
-        "valor_total": valor_total
+        "valor_total": valor_total,
+        "imposto_estimado_total": round(imposto_estimado_total, 2)  # NOVO
     }
 
 @app.delete("/api/notas/{nota_id}")
