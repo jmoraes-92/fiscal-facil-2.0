@@ -457,6 +457,131 @@ async def obter_estatisticas(empresa_id: str, current_user: dict = Depends(get_c
         "valor_total": valor_total
     }
 
+@app.delete("/api/notas/{nota_id}")
+async def excluir_nota(nota_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Exclui uma nota fiscal. Verifica se a nota pertence a uma empresa do usuário.
+    """
+    from bson import ObjectId
+    
+    # Busca a nota
+    try:
+        nota = await db.notas_fiscais.find_one({"_id": ObjectId(nota_id)})
+    except:
+        raise HTTPException(status_code=400, detail="ID de nota inválido")
+    
+    if not nota:
+        raise HTTPException(status_code=404, detail="Nota não encontrada")
+    
+    # Verifica se a empresa da nota pertence ao usuário
+    empresa_id = nota.get("empresa_id")
+    try:
+        empresa = await db.empresas.find_one({"_id": ObjectId(empresa_id)})
+    except:
+        pass
+    
+    if not empresa or str(empresa.get("usuario_id")) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    # Exclui a nota
+    await db.notas_fiscais.delete_one({"_id": ObjectId(nota_id)})
+    
+    return {
+        "mensagem": "Nota excluída com sucesso",
+        "nota_id": nota_id
+    }
+
+@app.put("/api/empresas/{empresa_id}")
+async def atualizar_empresa(
+    empresa_id: str,
+    dados: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Atualiza dados de uma empresa. Permite editar razão social, nome fantasia,
+    regime tributário e CNAEs permitidos.
+    """
+    from bson import ObjectId
+    
+    # Verifica se a empresa existe e pertence ao usuário
+    try:
+        empresa = await db.empresas.find_one({"_id": ObjectId(empresa_id)})
+    except:
+        raise HTTPException(status_code=400, detail="ID de empresa inválido")
+    
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    
+    if str(empresa.get("usuario_id")) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    # Campos que podem ser atualizados
+    campos_permitidos = [
+        "razao_social",
+        "nome_fantasia",
+        "regime_tributario",
+        "cnaes_permitidos",
+        "limite_faturamento_anual"
+    ]
+    
+    # Prepara o update
+    update_data = {}
+    for campo in campos_permitidos:
+        if campo in dados:
+            update_data[campo] = dados[campo]
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="Nenhum campo válido para atualizar")
+    
+    # Atualiza no banco
+    await db.empresas.update_one(
+        {"_id": ObjectId(empresa_id)},
+        {"$set": update_data}
+    )
+    
+    # Retorna empresa atualizada
+    empresa_atualizada = await db.empresas.find_one({"_id": ObjectId(empresa_id)})
+    empresa_atualizada["id"] = str(empresa_atualizada.pop("_id"))
+    
+    return {
+        "mensagem": "Empresa atualizada com sucesso",
+        "empresa": empresa_atualizada
+    }
+
+@app.delete("/api/empresas/{empresa_id}")
+async def excluir_empresa(empresa_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Exclui uma empresa e todas as suas notas fiscais associadas.
+    """
+    from bson import ObjectId
+    
+    # Verifica se a empresa existe e pertence ao usuário
+    try:
+        empresa = await db.empresas.find_one({"_id": ObjectId(empresa_id)})
+    except:
+        raise HTTPException(status_code=400, detail="ID de empresa inválido")
+    
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    
+    if str(empresa.get("usuario_id")) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    # Conta quantas notas serão excluídas
+    total_notas = await db.notas_fiscais.count_documents({"empresa_id": empresa_id})
+    
+    # Exclui todas as notas da empresa
+    await db.notas_fiscais.delete_many({"empresa_id": empresa_id})
+    
+    # Exclui a empresa
+    await db.empresas.delete_one({"_id": ObjectId(empresa_id)})
+    
+    return {
+        "mensagem": "Empresa e suas notas excluídas com sucesso",
+        "empresa_id": empresa_id,
+        "notas_excluidas": total_notas
+    }
+
 # ==================== DASHBOARD - MONITOR RBT12 ====================
 @app.get("/api/dashboard/metrics/{empresa_id}")
 async def obter_metricas_rbt12(empresa_id: str, current_user: dict = Depends(get_current_user)):
