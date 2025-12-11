@@ -130,8 +130,14 @@ const Dashboard = () => {
         {/* Área de Upload e Notas */}
         {empresaSelecionada && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <UploadXML empresaId={empresaSelecionada.id} />
-            <ListaNotas empresaId={empresaSelecionada.id} />
+            <UploadXML 
+              empresaId={empresaSelecionada.id} 
+              onUploadSuccess={() => setRefreshNotas(prev => prev + 1)}
+            />
+            <ListaNotas 
+              empresaId={empresaSelecionada.id} 
+              refreshTrigger={refreshNotas}
+            />
           </div>
         )}
       </div>
