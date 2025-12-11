@@ -454,15 +454,21 @@ async def listar_notas_empresa(empresa_id: str, current_user: dict = Depends(get
     if str(empresa.get("usuario_id")) != str(current_user["_id"]):
         raise HTTPException(status_code=403, detail="Acesso negado")
     
-    # Lista as notas
+    # Lista as notas com cálculo de imposto estimado
     notas = []
     async for nota in db.notas_fiscais.find({"empresa_id": empresa_id}):
+        valor_total = nota.get("valor_total", 0)
+        
+        # Cálculo de imposto estimado (Anexo III - 6%)
+        imposto_estimado = valor_total * 0.06
+        
         notas.append({
             "id": str(nota["_id"]),
             "numero_nota": nota["numero_nota"],
             "data_emissao": nota["data_emissao"],
             "codigo_servico_utilizado": nota["codigo_servico_utilizado"],
-            "valor_total": nota["valor_total"],
+            "valor_total": valor_total,
+            "imposto_estimado": round(imposto_estimado, 2),  # NOVO
             "status_auditoria": nota["status_auditoria"],
             "mensagem_erro": nota.get("mensagem_erro"),
             "data_importacao": nota["data_importacao"]
