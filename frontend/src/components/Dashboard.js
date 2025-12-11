@@ -1,0 +1,133 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import axios from 'axios';
+import CadastroEmpresa from './CadastroEmpresa';
+import UploadXML from './UploadXML';
+import ListaNotas from './ListaNotas';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
+
+const Dashboard = () => {
+  const { user, logout } = useAuth();
+  const [empresas, setEmpresas] = useState([]);
+  const [empresaSelecionada, setEmpresaSelecionada] = useState(null);
+  const [mostrarCadastro, setMostrarCadastro] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    carregarEmpresas();
+  }, []);
+
+  const carregarEmpresas = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/empresas`);
+      setEmpresas(response.data);
+      if (response.data.length > 0 && !empresaSelecionada) {
+        setEmpresaSelecionada(response.data[0]);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar empresas:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmpresaCadastrada = () => {
+    setMostrarCadastro(false);
+    carregarEmpresas();
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">📊 Fiscal Fácil</h1>
+              <p className="text-sm text-gray-600 mt-1">Bem-vindo, {user?.nome}</p>
+            </div>
+            <button
+              data-testid="logout-btn"
+              onClick={logout}
+              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+            >
+              Sair
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        {/* Seleção de Empresa */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-semibold text-gray-800">Minhas Empresas</h2>
+            <button
+              data-testid="btn-nova-empresa"
+              onClick={() => setMostrarCadastro(!mostrarCadastro)}
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+            >
+              {mostrarCadastro ? 'Cancelar' : '+ Nova Empresa'}
+            </button>
+          </div>
+
+          {mostrarCadastro && (
+            <CadastroEmpresa onEmpresaCadastrada={handleEmpresaCadastrada} />
+          )}
+
+          {!mostrarCadastro && empresas.length === 0 && (
+            <div className="text-center py-12 text-gray-500">
+              <p className="text-lg mb-2">🏢 Nenhuma empresa cadastrada</p>
+              <p className="text-sm">Clique em "Nova Empresa" para começar</p>
+            </div>
+          )}
+
+          {!mostrarCadastro && empresas.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {empresas.map((empresa) => (
+                <div
+                  key={empresa.id}
+                  data-testid={`empresa-card-${empresa.id}`}
+                  onClick={() => setEmpresaSelecionada(empresa)}
+                  className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                    empresaSelecionada?.id === empresa.id
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-blue-300'
+                  }`}
+                >
+                  <h3 className="font-semibold text-gray-900 mb-1">{empresa.razao_social}</h3>
+                  <p className="text-sm text-gray-600 mb-2">CNPJ: {empresa.cnpj}</p>
+                  <span className="inline-block px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded">
+                    {empresa.regime_tributario}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Área de Upload e Notas */}
+        {empresaSelecionada && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <UploadXML empresaId={empresaSelecionada.id} />
+            <ListaNotas empresaId={empresaSelecionada.id} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
