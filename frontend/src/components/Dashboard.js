@@ -128,6 +128,13 @@ const Dashboard = () => {
           </div>
         )}
 
+        {/* Botão de Relatório */}
+        {empresaSelecionada && (
+          <div className="mb-6">
+            <BotaoRelatorio empresaId={empresaSelecionada.id} />
+          </div>
+        )}
+
         {/* Área de Upload e Notas */}
         {empresaSelecionada && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
