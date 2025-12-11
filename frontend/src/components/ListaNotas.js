@@ -186,6 +186,14 @@ const ListaNotas = ({ empresaId, refreshTrigger }) => {
           </table>
         </div>
       )}
+
+      {/* Modal de visualização PDF */}
+      {notaSelecionadaPDF && (
+        <ModalPDFNota 
+          notaId={notaSelecionadaPDF}
+          onClose={() => setNotaSelecionadaPDF(null)}
+        />
+      )}
     </div>
   );
 };
