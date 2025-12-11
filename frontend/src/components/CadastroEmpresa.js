@@ -14,11 +14,53 @@ const CadastroEmpresa = ({ onEmpresaCadastrada }) => {
     cnaes_permitidos: []
   });
 
+  // Função para aplicar máscara de CNPJ
+  const aplicarMascaraCNPJ = (valor) => {
+    // Remove tudo que não é número
+    const numeros = valor.replace(/\D/g, '');
+    
+    // Aplica a máscara progressivamente
+    if (numeros.length <= 2) {
+      return numeros;
+    } else if (numeros.length <= 5) {
+      return numeros.replace(/(\d{2})(\d{0,3})/, '$1.$2');
+    } else if (numeros.length <= 8) {
+      return numeros.replace(/(\d{2})(\d{3})(\d{0,3})/, '$1.$2.$3');
+    } else if (numeros.length <= 12) {
+      return numeros.replace(/(\d{2})(\d{3})(\d{3})(\d{0,4})/, '$1.$2.$3/$4');
+    } else {
+      return numeros.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2})/, '$1.$2.$3/$4-$5');
+    }
+  };
+
+  // Remove máscara do CNPJ (apenas números)
+  const limparCNPJ = (valor) => {
+    return valor.replace(/\D/g, '');
+  };
+
+  // Handler para mudança no campo CNPJ
+  const handleCnpjChange = (e) => {
+    const valorDigitado = e.target.value;
+    const valorFormatado = aplicarMascaraCNPJ(valorDigitado);
+    setCnpj(valorFormatado);
+  };
+
   const consultarCNPJ = async () => {
     setError('');
     setLoading(true);
+    
+    // Remove a máscara antes de enviar
+    const cnpjLimpo = limparCNPJ(cnpj);
+    
+    // Validação básica
+    if (cnpjLimpo.length !== 14) {
+      setError('CNPJ inválido. Digite 14 números.');
+      setLoading(false);
+      return;
+    }
+    
     try {
-      const response = await axios.get(`${API_URL}/api/empresas/consulta/${cnpj}`);
+      const response = await axios.get(`${API_URL}/api/empresas/consulta/${cnpjLimpo}`);
       setDadosReceita(response.data);
       setStep(2);
     } catch (err) {
