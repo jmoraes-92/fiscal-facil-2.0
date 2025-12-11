@@ -188,11 +188,11 @@ const ListaNotas = ({ empresaId, refreshTrigger }) => {
         </div>
       )}
 
-      {/* Modal de visualização PDF */}
-      {notaSelecionadaPDF && (
-        <ModalPDFNota 
-          notaId={notaSelecionadaPDF}
-          onClose={() => setNotaSelecionadaPDF(null)}
+      {/* Modal de visualização */}
+      {notaSelecionada && (
+        <ModalVisualizarNota 
+          notaId={notaSelecionada}
+          onClose={() => setNotaSelecionada(null)}
         />
       )}
     </div>
