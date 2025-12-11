@@ -14,6 +14,7 @@ const Dashboard = () => {
   const [empresaSelecionada, setEmpresaSelecionada] = useState(null);
   const [mostrarCadastro, setMostrarCadastro] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshNotas, setRefreshNotas] = useState(0);
 
   useEffect(() => {
     carregarEmpresas();
