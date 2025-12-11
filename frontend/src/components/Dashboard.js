@@ -119,6 +119,13 @@ const Dashboard = () => {
           )}
         </div>
 
+        {/* Monitor RBT12 */}
+        {empresaSelecionada && (
+          <div className="mb-6">
+            <MonitorRBT12 empresaId={empresaSelecionada.id} />
+          </div>
+        )}
+
         {/* Área de Upload e Notas */}
         {empresaSelecionada && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
