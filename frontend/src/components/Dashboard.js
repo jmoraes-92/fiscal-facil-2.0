@@ -6,6 +6,7 @@ import UploadXML from './UploadXML';
 import ListaNotas from './ListaNotas';
 import MonitorRBT12 from './MonitorRBT12';
 import BotaoRelatorio from './BotaoRelatorio';
+import ImpostoEstimado from './ImpostoEstimado';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8001';
 
