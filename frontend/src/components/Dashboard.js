@@ -25,7 +25,21 @@ const Dashboard = () => {
     try {
       const response = await axios.get(`${API_URL}/api/empresas`);
       setEmpresas(response.data);
-      if (response.data.length > 0 && !empresaSelecionada) {
+      
+      // Tenta restaurar empresa selecionada do localStorage
+      const empresaIdSalva = localStorage.getItem('empresaSelecionadaId');
+      
+      if (empresaIdSalva && response.data.length > 0) {
+        // Busca a empresa pelo ID salvo
+        const empresaRestaurada = response.data.find(e => e.id === empresaIdSalva);
+        if (empresaRestaurada) {
+          setEmpresaSelecionada(empresaRestaurada);
+        } else {
+          // Se não encontrou, seleciona a primeira
+          setEmpresaSelecionada(response.data[0]);
+        }
+      } else if (response.data.length > 0 && !empresaSelecionada) {
+        // Primeira vez ou sem empresa salva
         setEmpresaSelecionada(response.data[0]);
       }
     } catch (error) {
@@ -33,6 +47,12 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Salva no localStorage quando empresa é selecionada
+  const handleSelecionarEmpresa = (empresa) => {
+    setEmpresaSelecionada(empresa);
+    localStorage.setItem('empresaSelecionadaId', empresa.id);
   };
 
   const handleEmpresaCadastrada = () => {
