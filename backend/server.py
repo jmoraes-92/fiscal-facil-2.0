@@ -514,6 +514,62 @@ async def obter_estatisticas(empresa_id: str, current_user: dict = Depends(get_c
         "imposto_estimado_total": round(imposto_estimado_total, 2)  # NOVO
     }
 
+@app.get("/api/notas/imposto-mes/{empresa_id}")
+async def obter_imposto_mes(empresa_id: str, current_user: dict = Depends(get_current_user)):
+    """
+    Retorna o imposto estimado das notas do mês atual.
+    Regra: Anexo III do Simples Nacional (6% fixo para MVP).
+    """
+    from bson import ObjectId
+    from dateutil.relativedelta import relativedelta
+    
+    # Verifica acesso
+    try:
+        empresa = await db.empresas.find_one({"_id": ObjectId(empresa_id)})
+    except:
+        raise HTTPException(status_code=400, detail="ID inválido")
+    
+    if not empresa or str(empresa.get("usuario_id")) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    # Define o intervalo do mês atual
+    hoje = datetime.utcnow()
+    primeiro_dia_mes = hoje.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    proximo_mes = primeiro_dia_mes + relativedelta(months=1)
+    
+    # Agregação para somar valores do mês
+    pipeline = [
+        {
+            "$match": {
+                "empresa_id": empresa_id,
+                "data_emissao": {
+                    "$gte": primeiro_dia_mes.isoformat(),
+                    "$lt": proximo_mes.isoformat()
+                }
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "valor_total_mes": {"$sum": "$valor_total"}
+            }
+        }
+    ]
+    
+    resultado = await db.notas_fiscais.aggregate(pipeline).to_list(1)
+    valor_total_mes = resultado[0]["valor_total_mes"] if resultado else 0.0
+    
+    # Cálculo do imposto estimado (6% - Anexo III)
+    imposto_estimado_mes = valor_total_mes * 0.06
+    
+    return {
+        "mes_referencia": hoje.strftime('%m/%Y'),
+        "valor_total_mes": round(valor_total_mes, 2),
+        "imposto_estimado_mes": round(imposto_estimado_mes, 2),
+        "aliquota_aplicada": 6.0,
+        "base_calculo": "Anexo III - Simples Nacional"
+    }
+
 @app.delete("/api/notas/{nota_id}")
 async def excluir_nota(nota_id: str, current_user: dict = Depends(get_current_user)):
     """
