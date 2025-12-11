@@ -142,10 +142,11 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Monitor RBT12 */}
+        {/* KPIs e Monitores */}
         {empresaSelecionada && (
-          <div className="mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <MonitorRBT12 empresaId={empresaSelecionada.id} />
+            <ImpostoEstimado empresaId={empresaSelecionada.id} />
           </div>
         )}
 
