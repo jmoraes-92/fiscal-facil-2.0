@@ -276,9 +276,20 @@ async def importar_nota_xml(
     }
     
     result = await db.notas_fiscais.insert_one(nota_doc)
-    nota_doc["id"] = str(result.inserted_id)
     
-    return nota_doc
+    # Retorna a nota sem o _id do MongoDB
+    return {
+        "id": str(result.inserted_id),
+        "numero_nota": nota_doc["numero_nota"],
+        "data_emissao": nota_doc["data_emissao"],
+        "codigo_servico_utilizado": nota_doc["codigo_servico_utilizado"],
+        "valor_total": nota_doc["valor_total"],
+        "status_auditoria": nota_doc["status_auditoria"],
+        "mensagem_erro": nota_doc["mensagem_erro"],
+        "chave_validacao": nota_doc.get("chave_validacao"),
+        "cnpj_tomador": nota_doc.get("cnpj_tomador"),
+        "data_importacao": nota_doc["data_importacao"]
+    }
 
 @app.get("/api/notas/empresa/{empresa_id}")
 async def listar_notas_empresa(empresa_id: str, current_user: dict = Depends(get_current_user)):
