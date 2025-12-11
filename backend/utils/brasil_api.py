@@ -15,6 +15,14 @@ def consultar_cnpj(cnpj: str):
         
         if response.status_code == 200:
             dados = response.json()
+            cnae_principal = dados.get("cnae_fiscal_principal")
+            cnae_codigo = cnae_principal.get("codigo") if cnae_principal else None
+            
+            cnaes_sec = []
+            for c in dados.get("cnaes_secundarios", []):
+                if isinstance(c, dict):
+                    cnaes_sec.append(c.get("codigo", ""))
+            
             return {
                 "cnpj": cnpj_limpo,
                 "razao_social": dados.get("razao_social"),
@@ -23,8 +31,8 @@ def consultar_cnpj(cnpj: str):
                 "bairro": dados.get("bairro"),
                 "municipio": dados.get("municipio"),
                 "uf": dados.get("uf"),
-                "cnae_principal": dados.get("cnae_fiscal_principal", {}).get("code"),
-                "cnaes_secundarios": [c['code'] for c in dados.get("cnaes_secundarios", [])]
+                "cnae_principal": cnae_codigo,
+                "cnaes_secundarios": cnaes_sec
             }
         else:
             logger.warning(f"BrasilAPI retornou status {response.status_code}")
