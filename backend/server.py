@@ -357,6 +357,85 @@ async def obter_estatisticas(empresa_id: str, current_user: dict = Depends(get_c
         "valor_total": valor_total
     }
 
+# ==================== DASHBOARD - MONITOR RBT12 ====================
+@app.get("/api/dashboard/metrics/{empresa_id}")
+async def obter_metricas_rbt12(empresa_id: str, current_user: dict = Depends(get_current_user)):
+    from bson import ObjectId
+    from dateutil.relativedelta import relativedelta
+    
+    # Verifica se a empresa pertence ao usuário
+    try:
+        empresa = await db.empresas.find_one({"_id": ObjectId(empresa_id)})
+    except:
+        raise HTTPException(status_code=400, detail="ID de empresa inválido")
+    
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    
+    if str(empresa.get("usuario_id")) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    # Calcula data de 12 meses atrás
+    hoje = datetime.utcnow()
+    doze_meses_atras = hoje - relativedelta(months=12)
+    
+    # Pipeline de agregação para somar faturamento dos últimos 12 meses
+    pipeline = [
+        {
+            "$match": {
+                "empresa_id": empresa_id,
+                "data_emissao": {
+                    "$gte": doze_meses_atras.isoformat(),
+                    "$lte": hoje.isoformat()
+                }
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "faturamento_12_meses": {"$sum": "$valor_total"}
+            }
+        }
+    ]
+    
+    resultado = await db.notas_fiscais.aggregate(pipeline).to_list(1)
+    faturamento_atual = resultado[0]["faturamento_12_meses"] if resultado else 0.0
+    
+    # Obtem limite da empresa (padrão MEI: R$ 81.000,00)
+    limite_anual = 81000.00  # Padrão MEI
+    
+    # Se houver limite cadastrado, usa ele
+    if "limite_faturamento_anual" in empresa:
+        limite_anual = float(empresa["limite_faturamento_anual"])
+    elif empresa.get("regime_tributario") == "Simples Nacional":
+        limite_anual = 4800000.00  # Limite Simples Nacional
+    elif empresa.get("regime_tributario") == "Lucro Presumido":
+        limite_anual = 78000000.00  # Limite Lucro Presumido
+    
+    # Calcula percentual de uso
+    percentual_uso = (faturamento_atual / limite_anual * 100) if limite_anual > 0 else 0
+    
+    # Define status baseado no percentual
+    if percentual_uso >= 100:
+        status = "ESTOUROU"
+    elif percentual_uso >= 80:
+        status = "ALERTA"
+    else:
+        status = "OK"
+    
+    # Calcula quanto falta para o limite
+    margem_disponivel = limite_anual - faturamento_atual
+    
+    return {
+        "faturamento_atual": round(faturamento_atual, 2),
+        "limite": round(limite_anual, 2),
+        "percentual_uso": round(percentual_uso, 2),
+        "status": status,
+        "margem_disponivel": round(margem_disponivel, 2),
+        "regime_tributario": empresa.get("regime_tributario", "MEI"),
+        "razao_social": empresa.get("razao_social", "")
+    }
+
 # ==================== ROTA HOME ====================
 @app.get("/")
 async def home():
