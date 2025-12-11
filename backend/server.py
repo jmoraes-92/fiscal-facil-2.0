@@ -217,6 +217,75 @@ async def obter_empresa(empresa_id: str, current_user: dict = Depends(get_curren
     return empresa
 
 # ==================== ROTAS DE NOTAS FISCAIS ====================
+
+# Função auxiliar para processar um único XML
+async def processar_xml_nota(empresa_id: str, empresa: dict, conteudo: bytes, nome_arquivo: str):
+    """
+    Processa um arquivo XML e retorna o resultado do processamento.
+    Não levanta exceções, retorna dict com sucesso ou erro.
+    """
+    try:
+        # Parse do XML
+        dados_xml = parse_xml_nota(conteudo)
+        
+        if "erro" in dados_xml:
+            return {
+                "sucesso": False,
+                "nome_arquivo": nome_arquivo,
+                "erro": dados_xml["erro"]
+            }
+        
+        # Auditoria: Verifica se o código de serviço está permitido
+        codigo_servico = dados_xml['codigo_servico']
+        cnaes_permitidos = empresa.get("cnaes_permitidos", [])
+        
+        cnae_encontrado = None
+        for cnae in cnaes_permitidos:
+            if cnae.get("codigo_servico_municipal") == codigo_servico:
+                cnae_encontrado = cnae
+                break
+        
+        status = "APROVADA"
+        mensagem = "Nota fiscal em conformidade"
+        
+        if not cnae_encontrado:
+            status = "ERRO_CNAE"
+            mensagem = f"Código de serviço '{codigo_servico}' não autorizado para este CNPJ"
+        
+        # Salva a nota
+        nota_doc = {
+            "empresa_id": empresa_id,
+            "numero_nota": dados_xml['numero_nota'],
+            "data_emissao": dados_xml['data_emissao'],
+            "chave_validacao": dados_xml.get('chave_validacao'),
+            "cnpj_tomador": dados_xml.get('cnpj_tomador'),
+            "codigo_servico_utilizado": codigo_servico,
+            "valor_total": dados_xml['valor_total'],
+            "status_auditoria": status,
+            "mensagem_erro": mensagem,
+            "data_importacao": datetime.utcnow().isoformat()
+        }
+        
+        result = await db.notas_fiscais.insert_one(nota_doc)
+        
+        return {
+            "sucesso": True,
+            "nome_arquivo": nome_arquivo,
+            "nota": {
+                "id": str(result.inserted_id),
+                "numero_nota": nota_doc["numero_nota"],
+                "status_auditoria": nota_doc["status_auditoria"],
+                "valor_total": nota_doc["valor_total"]
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "sucesso": False,
+            "nome_arquivo": nome_arquivo,
+            "erro": f"Erro ao processar: {str(e)}"
+        }
+
 @app.post("/api/notas/importar/{empresa_id}")
 async def importar_nota_xml(
     empresa_id: str, 
@@ -239,56 +308,87 @@ async def importar_nota_xml(
     
     # Lê o XML
     conteudo = await file.read()
-    dados_xml = parse_xml_nota(conteudo)
+    resultado = await processar_xml_nota(empresa_id, empresa, conteudo, file.filename)
     
-    if "erro" in dados_xml:
-        raise HTTPException(status_code=400, detail=dados_xml["erro"])
+    if not resultado["sucesso"]:
+        raise HTTPException(status_code=400, detail=resultado["erro"])
     
-    # Auditoria: Verifica se o código de serviço está permitido
-    codigo_servico = dados_xml['codigo_servico']
-    cnaes_permitidos = empresa.get("cnaes_permitidos", [])
+    # Busca a nota completa para retornar
+    from bson import ObjectId
+    nota = await db.notas_fiscais.find_one({"_id": ObjectId(resultado["nota"]["id"])})
     
-    cnae_encontrado = None
-    for cnae in cnaes_permitidos:
-        if cnae.get("codigo_servico_municipal") == codigo_servico:
-            cnae_encontrado = cnae
-            break
-    
-    status = "APROVADA"
-    mensagem = "Nota fiscal em conformidade"
-    
-    if not cnae_encontrado:
-        status = "ERRO_CNAE"
-        mensagem = f"Código de serviço '{codigo_servico}' não autorizado para este CNPJ"
-    
-    # Salva a nota
-    nota_doc = {
-        "empresa_id": empresa_id,
-        "numero_nota": dados_xml['numero_nota'],
-        "data_emissao": dados_xml['data_emissao'],
-        "chave_validacao": dados_xml.get('chave_validacao'),
-        "cnpj_tomador": dados_xml.get('cnpj_tomador'),
-        "codigo_servico_utilizado": codigo_servico,
-        "valor_total": dados_xml['valor_total'],
-        "status_auditoria": status,
-        "mensagem_erro": mensagem,
-        "data_importacao": datetime.utcnow().isoformat()
-    }
-    
-    result = await db.notas_fiscais.insert_one(nota_doc)
-    
-    # Retorna a nota sem o _id do MongoDB
     return {
-        "id": str(result.inserted_id),
-        "numero_nota": nota_doc["numero_nota"],
-        "data_emissao": nota_doc["data_emissao"],
-        "codigo_servico_utilizado": nota_doc["codigo_servico_utilizado"],
-        "valor_total": nota_doc["valor_total"],
-        "status_auditoria": nota_doc["status_auditoria"],
-        "mensagem_erro": nota_doc["mensagem_erro"],
-        "chave_validacao": nota_doc.get("chave_validacao"),
-        "cnpj_tomador": nota_doc.get("cnpj_tomador"),
-        "data_importacao": nota_doc["data_importacao"]
+        "id": str(nota["_id"]),
+        "numero_nota": nota["numero_nota"],
+        "data_emissao": nota["data_emissao"],
+        "codigo_servico_utilizado": nota["codigo_servico_utilizado"],
+        "valor_total": nota["valor_total"],
+        "status_auditoria": nota["status_auditoria"],
+        "mensagem_erro": nota["mensagem_erro"],
+        "chave_validacao": nota.get("chave_validacao"),
+        "cnpj_tomador": nota.get("cnpj_tomador"),
+        "data_importacao": nota["data_importacao"]
+    }
+
+@app.post("/api/notas/importar-lote/{empresa_id}")
+async def importar_notas_em_lote(
+    empresa_id: str,
+    files: List[UploadFile] = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Importa múltiplos arquivos XML de notas fiscais de uma vez.
+    Processa todos os arquivos de forma "graceful" - se um falhar, continua os outros.
+    """
+    from bson import ObjectId
+    
+    # Verifica se a empresa existe e pertence ao usuário
+    try:
+        empresa = await db.empresas.find_one({"_id": ObjectId(empresa_id)})
+    except:
+        raise HTTPException(status_code=400, detail="ID de empresa inválido")
+    
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    
+    if str(empresa.get("usuario_id")) != str(current_user["_id"]):
+        raise HTTPException(status_code=403, detail="Acesso negado")
+    
+    # Valida quantidade de arquivos (máximo 100 por upload)
+    if len(files) > 100:
+        raise HTTPException(status_code=400, detail="Máximo de 100 arquivos por upload")
+    
+    # Processa cada arquivo
+    resultados = []
+    sucessos = 0
+    falhas = 0
+    detalhes_falhas = []
+    
+    for idx, file in enumerate(files, 1):
+        # Lê o conteúdo
+        conteudo = await file.read()
+        
+        # Processa o XML
+        resultado = await processar_xml_nota(empresa_id, empresa, conteudo, file.filename)
+        
+        if resultado["sucesso"]:
+            sucessos += 1
+        else:
+            falhas += 1
+            detalhes_falhas.append({
+                "arquivo": file.filename,
+                "erro": resultado["erro"]
+            })
+        
+        resultados.append(resultado)
+    
+    # Retorna resumo
+    return {
+        "total_arquivos": len(files),
+        "sucesso": sucessos,
+        "falhas": falhas,
+        "detalhes_falhas": detalhes_falhas,
+        "resultados": resultados
     }
 
 @app.get("/api/notas/empresa/{empresa_id}")
