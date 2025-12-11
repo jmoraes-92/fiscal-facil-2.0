@@ -162,23 +162,70 @@ const UploadXML = ({ empresaId, onUploadSuccess }) => {
                 </div>
               </div>
 
-              {resultado.falhas > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
-                  <p className="font-semibold text-red-900 mb-2">Arquivos com Erro:</p>
-                  <ul className="space-y-1">
-                    {resultado.detalhes_falhas.map((falha, idx) => (
-                      <li key={idx} className="text-sm text-red-700">
-                        <strong>{falha.arquivo}:</strong> {falha.erro}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {/* Lista detalhada de resultados */}
+              <div className="mt-4 space-y-2 max-h-96 overflow-y-auto">
+                <p className="font-semibold text-gray-900 mb-2">Detalhamento do Processamento:</p>
+                {resultado.resultados && resultado.resultados.map((item, idx) => (
+                  <div 
+                    key={idx} 
+                    className={`flex items-start gap-3 p-3 rounded-lg border ${
+                      item.sucesso 
+                        ? 'bg-green-50 border-green-200' 
+                        : 'bg-red-50 border-red-200'
+                    }`}
+                  >
+                    {/* Ícone */}
+                    <div className="flex-shrink-0 mt-0.5">
+                      {item.sucesso ? (
+                        <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <svg className="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
 
-              <div className="mt-3 p-3 bg-white rounded-lg border border-blue-200">
-                <p className="text-sm text-gray-700">
-                  ✅ <strong>{resultado.sucesso}</strong> nota{resultado.sucesso !== 1 ? 's' : ''} 
-                  importada{resultado.sucesso !== 1 ? 's' : ''} e auditada{resultado.sucesso !== 1 ? 's' : ''} com sucesso!
+                    {/* Conteúdo */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`font-semibold ${item.sucesso ? 'text-green-900' : 'text-red-900'}`}>
+                          {item.nome_arquivo}
+                        </span>
+                        {item.sucesso && item.nota && (
+                          <span className="text-xs px-2 py-0.5 bg-white rounded-full text-gray-600">
+                            Nota #{item.nota.numero_nota}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {item.sucesso ? (
+                        <p className="text-sm text-green-700">
+                          ✅ Processada com sucesso
+                          {item.nota && (
+                            <span className="text-green-600">
+                              {' • '}Status: {item.nota.status_auditoria}
+                              {' • '}Valor: R$ {item.nota.valor_total?.toFixed(2)}
+                            </span>
+                          )}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-red-700">
+                          ❌ Falha: {item.erro}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 p-3 bg-white rounded-lg border border-blue-200">
+                <p className="text-sm text-gray-700 text-center">
+                  <strong className="text-green-600">{resultado.sucesso}</strong> nota{resultado.sucesso !== 1 ? 's' : ''} processada{resultado.sucesso !== 1 ? 's' : ''} com sucesso
+                  {resultado.falhas > 0 && (
+                    <span> • <strong className="text-red-600">{resultado.falhas}</strong> falha{resultado.falhas !== 1 ? 's' : ''}</span>
+                  )}
                 </p>
               </div>
             </div>
